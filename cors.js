@@ -3,7 +3,8 @@ const allowedOrigins = [
   "https://mb-react-web-admin.vercel.app",
   "https://mb-react-web-frontend.vercel.app",
   "https://mira-bhayandar-projects-admin.vercel.app/",
-  
+  "https://admin.mirabhayandarproperty.com/",
+  "https://mirabhayandarproperty.com/",
   "http://localhost:3000",
   "http://localhost:5173",
   "http://localhost:5174",
