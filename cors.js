@@ -2,10 +2,11 @@
 const allowedOrigins = [
   "https://mb-react-web-admin.vercel.app",
   "https://mb-react-web-frontend.vercel.app",
-  "https://mira-bhayandar-projects-admin.vercel.app/",
+  "https://mira-bhayandar-projects-admin.vercel.app",
   "https://admin.mirabhayandarproperty.com",
   "https://mirabhayandarproperty.com",
   "https://api.mirabhayandarproperty.com",
+  "https://mira-bhayandar-projects-client-jtga.vercel.app"
   "http://localhost:3000",
   "http://localhost:5173",
   "http://localhost:5174",
