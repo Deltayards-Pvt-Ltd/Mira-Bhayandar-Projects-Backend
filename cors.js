@@ -5,6 +5,7 @@ const allowedOrigins = [
   "https://mira-bhayandar-projects-admin.vercel.app/",
   "https://admin.mirabhayandarproperty.com/",
   "https://mirabhayandarproperty.com/",
+  "https://api.mirabhayandarproperty.com/",
   "http://localhost:3000",
   "http://localhost:5173",
   "http://localhost:5174",
