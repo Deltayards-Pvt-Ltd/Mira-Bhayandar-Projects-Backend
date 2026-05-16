@@ -1,11 +1,11 @@
 import blogModel from "../models/blog.js";
-import { destroyCloudinaryUrl, isCloudinaryUrl } from "../utils/cloudinaryAssets.js";
+import { deleteS3Object, isS3AssetUrl } from "../utils/s3Assets.js";
 
 const createBlog = async (req, res) => {
     try {
         const { title, content, writer, tagline } = req.body;
 
-        const imagePath = req.file?.path || "";
+        const imagePath = req.file?.location || req.file?.path || "";
 
         const blog = new blogModel({
             title,
@@ -41,8 +41,8 @@ const deleteBlog = async (req, res) => {
             return res.status(404).json({ success: false, message: "Blog not found" });
         }
 
-        if (blog.image && isCloudinaryUrl(blog.image)) {
-            await destroyCloudinaryUrl(blog.image);
+        if (blog.image && isS3AssetUrl(blog.image)) {
+            await deleteS3Object(blog.image);
         }
 
         await blogModel.findByIdAndDelete(id);

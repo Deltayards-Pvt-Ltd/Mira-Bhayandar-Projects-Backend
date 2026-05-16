@@ -1,6 +1,6 @@
+import "./config/loadEnv.js";
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 
 import connectDb from "./config/db.js";
 import corsOptions from "./cors.js";
@@ -16,7 +16,6 @@ import leadRouter from "./routes/lead.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
-dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 

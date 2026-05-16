@@ -3,8 +3,8 @@ import projectModel, { PROJECT_STATUSES } from "../models/project.js";
 import {
   collectProjectAssetUrls,
   diffUrlsToDelete,
-  destroyCloudinaryUrls,
-} from "../utils/cloudinaryAssets.js";
+  deleteS3Objects,
+} from "../utils/s3Assets.js";
 
 function parseStatus(v) {
   const s = typeof v === "string" ? v.trim() : "";
@@ -19,9 +19,13 @@ function parseContactNumber(v) {
   return typeof v === "string" ? v.trim() : "";
 }
 
-/** Multer + CloudinaryStorage sets file.path to secure_url. */
+function parseReraNo(v) {
+  return typeof v === "string" ? v.trim() : "";
+}
+
+/** Multer-S3 sets file.location to the public object URL. */
 function fileUrl(file) {
-  return file?.path || "";
+  return file?.location || file?.path || "";
 }
 
 /** Optional WGS84 coordinate from multipart / JSON body. */
@@ -41,6 +45,7 @@ const createProject = async (req, res) => {
       features,
       reraMonth,
       reraYear,
+      reraNo,
       status,
       contactNumber,
     } = req.body;
@@ -135,6 +140,7 @@ const createProject = async (req, res) => {
       coverImage: coverImagePath,
       coverVideo: coverVideoPath,
       bannerImage: bannerImagePath,
+      reraNo: parseReraNo(reraNo),
       reraPossession: {
         month: typeof reraMonth === "string" ? reraMonth.trim() : "",
         year: yearNum,
@@ -263,6 +269,7 @@ const updateProject = async (req, res) => {
       ocCertificateChanged,
       reraMonth,
       reraYear,
+      reraNo,
       status,
       contactNumber,
       galleryImages: galleryImagesStr = "[]",
@@ -326,12 +333,14 @@ const updateProject = async (req, res) => {
 
     let reraCertificate = existingProject.reraCertificate || "";
     if (reraCertificateChanged === "true") {
-      reraCertificate = fileUrl(req.files?.reraCertificate?.[0]) || "";
+      const nextRera = fileUrl(req.files?.reraCertificate?.[0]);
+      if (nextRera) reraCertificate = nextRera;
     }
 
     let ocCertificate = existingProject.ocCertificate || "";
     if (ocCertificateChanged === "true") {
-      ocCertificate = fileUrl(req.files?.ocCertificate?.[0]) || "";
+      const nextOc = fileUrl(req.files?.ocCertificate?.[0]);
+      if (nextOc) ocCertificate = nextOc;
     }
 
     const newGalleryPaths = galleryNewImages.map((file) => ({
@@ -393,6 +402,7 @@ const updateProject = async (req, res) => {
       galleryImages: updatedGalleryImages,
       layouts: updatedLayouts,
       browcherPdf: pdfPathWithExt,
+      reraNo: parseReraNo(reraNo ?? existingProject.reraNo),
       reraPossession: {
         month:
           typeof reraMonth === "string"
@@ -407,7 +417,7 @@ const updateProject = async (req, res) => {
     const oldUrls = collectProjectAssetUrls(existingProject);
     const newUrls = collectProjectAssetUrls(updatedFields);
     const toDelete = diffUrlsToDelete(oldUrls, newUrls);
-    await destroyCloudinaryUrls(toDelete);
+    await deleteS3Objects(toDelete);
 
     const updatedProject = await projectModel.findByIdAndUpdate(id, updatedFields, {
       new: true,
@@ -437,7 +447,7 @@ const deleteProject = async (req, res) => {
       return res.status(404).json({ success: false, message: "Project not found" });
     }
 
-    await destroyCloudinaryUrls(collectProjectAssetUrls(project));
+    await deleteS3Objects(collectProjectAssetUrls(project));
     await projectModel.findByIdAndDelete(id);
 
     res.status(200).json({ success: true, message: "Project deleted" });
