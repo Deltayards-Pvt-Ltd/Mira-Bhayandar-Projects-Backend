@@ -67,6 +67,12 @@ const projectSchema = new mongoose.Schema(
 
     browcherPdf: { type: String, default: "" },
 
+    reraNo: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
     reraPossession: {
       month: { type: String, default: "" },
       year: { type: Number },
