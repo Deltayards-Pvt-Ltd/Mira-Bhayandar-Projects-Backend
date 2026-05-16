@@ -8,6 +8,7 @@ const allowedOrigins = [
   "https://www.mirabhayandarproperty.com",
   "https://api.mirabhayandarproperty.com",
   "https://mira-bhayandar-projects-client-jtga.vercel.app",
+  "https://www.mirabhayandarproperty.com/",
   "http://localhost:3000",
   "http://localhost:5173",
   "http://localhost:5174",
