@@ -2,10 +2,13 @@
 const allowedOrigins = [
   "https://mb-react-web-admin.vercel.app",
   "https://mb-react-web-frontend.vercel.app",
+  "https://mira-bhayandar-projects-admin.vercel.app/",
+  
   "http://localhost:3000",
   "http://localhost:5173",
   "http://localhost:5174",
   "http://localhost:5175",
+
 ];
 
 // Allow any localhost / 127.0.0.1 port during development (Vite drifts to 5173/5174/5175…)
