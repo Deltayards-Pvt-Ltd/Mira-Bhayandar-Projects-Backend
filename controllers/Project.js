@@ -1,10 +1,20 @@
 import mongoose from "mongoose";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
 import projectModel, { PROJECT_STATUSES } from "../models/project.js";
 import {
   collectProjectAssetUrls,
   diffUrlsToDelete,
   deleteS3Objects,
+  isS3AssetUrl,
+  parseS3KeyFromUrl,
 } from "../utils/s3Assets.js";
+import { buildProjectFilterOptions } from "../utils/projectFilters.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadsRoot = path.resolve(path.join(__dirname, "..", "uploads"));
 
 function parseStatus(v) {
   const s = typeof v === "string" ? v.trim() : "";
@@ -165,6 +175,24 @@ const getAllProjects = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: "Failed to fetch all projects" });
+  }
+};
+
+/** Unique locality + configuration options derived from all projects (for filter dropdowns). */
+const getProjectFilters = async (req, res) => {
+  try {
+    const projects = await projectModel
+      .find({}, { location: 1, layouts: 1 })
+      .lean();
+    const filters = buildProjectFilterOptions(projects);
+    res.status(200).json({
+      success: true,
+      message: "Project filters fetched",
+      filters,
+    });
+  } catch (error) {
+    console.error("getProjectFilters error:", error);
+    res.status(500).json({ success: false, message: "Failed to fetch project filters" });
   }
 };
 
@@ -418,6 +446,74 @@ const updateProject = async (req, res) => {
   }
 };
 
+function safeDownloadFilename(name) {
+  const base = String(name || "download")
+    .replace(/[^\w.\- ]/g, "")
+    .trim()
+    .slice(0, 120);
+  return base || "download";
+}
+
+function resolveLocalUploadPath(relativePath) {
+  const clean = String(relativePath).replace(/^\/+/, "");
+  if (!clean.startsWith("uploads/") || clean.includes("..")) return null;
+  const full = path.resolve(path.join(__dirname, "..", clean));
+  if (!full.startsWith(uploadsRoot)) return null;
+  return full;
+}
+
+const downloadProjectAsset = async (req, res) => {
+  try {
+    const raw = String(req.query.url || req.query.path || "").trim();
+    const filename = safeDownloadFilename(req.query.filename);
+
+    if (!raw) {
+      return res.status(400).json({ success: false, message: "Missing asset url" });
+    }
+
+    // Public S3 objects: fetch over HTTPS (no IAM GetObject required).
+    if (isS3AssetUrl(raw)) {
+      const key = parseS3KeyFromUrl(raw);
+      if (!key) {
+        return res.status(400).json({ success: false, message: "Invalid S3 asset" });
+      }
+
+      const ext = path.extname(key) || "";
+      const downloadName = filename.includes(".") ? filename : `${filename}${ext}`;
+      const upstream = await fetch(raw);
+      if (!upstream.ok) {
+        return res.status(404).json({ success: false, message: "Asset not found" });
+      }
+
+      const contentType =
+        upstream.headers.get("content-type") || "application/octet-stream";
+      const contentLength = upstream.headers.get("content-length");
+
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${downloadName}"`
+      );
+      res.setHeader("Content-Type", contentType);
+      if (contentLength) res.setHeader("Content-Length", contentLength);
+
+      const buffer = Buffer.from(await upstream.arrayBuffer());
+      return res.end(buffer);
+    }
+
+    const localPath = resolveLocalUploadPath(raw);
+    if (!localPath || !fs.existsSync(localPath)) {
+      return res.status(404).json({ success: false, message: "Asset not found" });
+    }
+
+    const ext = path.extname(localPath) || "";
+    const downloadName = filename.includes(".") ? filename : `${filename}${ext}`;
+    return res.download(localPath, downloadName);
+  } catch (error) {
+    console.error("Download asset error:", error);
+    return res.status(500).json({ success: false, message: "Failed to download asset" });
+  }
+};
+
 const deleteProject = async (req, res) => {
   try {
     const { id } = req.body;
@@ -440,7 +536,9 @@ export {
   createProject,
   updateProject,
   getAllProjects,
+  getProjectFilters,
   getProjectById,
   getHeroProjects,
+  downloadProjectAsset,
   deleteProject,
 };
