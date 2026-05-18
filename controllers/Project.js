@@ -463,6 +463,8 @@ function resolveLocalUploadPath(relativePath) {
 }
 
 const downloadProjectAsset = async (req, res) => {
+
+  console.log("downloadProjectAsset called");
   try {
     const raw = String(req.query.url || req.query.path || "").trim();
     const filename = safeDownloadFilename(req.query.filename);
