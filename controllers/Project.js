@@ -23,9 +23,14 @@ function parseReraNo(v) {
   return typeof v === "string" ? v.trim() : "";
 }
 
-/** Multer-S3 sets file.location to the public object URL. */
-function fileUrl(file) {
-  return file?.location || file?.path || "";
+function parseJsonField(value, fallback) {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "object") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
 }
 
 /** Optional WGS84 coordinate from multipart / JSON body. */
@@ -64,63 +69,49 @@ const createProject = async (req, res) => {
         .json({ success: false, message: "Description is required" });
     }
 
-    const galleryPaths = (req.files.galleryImages || []).map((file) => ({
-      title: file.originalname.replace(/\s+/g, "_").split(".")[0],
-      image: fileUrl(file),
-    }));
+    const galleryPaths = parseJsonField(req.body.galleryImages, []);
+    if (!Array.isArray(galleryPaths)) {
+      return res.status(400).json({ success: false, message: "galleryImages must be an array" });
+    }
 
-    const pdfFile = req.files?.browcherPdf?.[0];
-    const pdfPath = fileUrl(pdfFile);
-
-    const logoPath = fileUrl(req.files?.logo?.[0]);
+    const pdfPath = req.body.browcherPdf || "";
+    const logoPath = req.body.logo || "";
     if (!logoPath) {
-      return res.status(400).json({ success: false, message: "Logo file is required" });
+      return res.status(400).json({ success: false, message: "Logo is required" });
     }
 
-    const coverImagePath = fileUrl(req.files?.coverImage?.[0]);
-    const coverVideoPath = fileUrl(req.files?.coverVideo?.[0]);
-    const bannerImagePath = fileUrl(req.files?.bannerImage?.[0]);
-    const reraCertPath = fileUrl(req.files?.reraCertificate?.[0]);
-    const ocCertPath = fileUrl(req.files?.ocCertificate?.[0]);
+    const coverImagePath = req.body.coverImage || "";
+    const coverVideoPath = req.body.coverVideo || "";
+    const bannerImagePath = req.body.bannerImage || "";
+    const reraCertPath = req.body.reraCertificate || "";
+    const ocCertPath = req.body.ocCertificate || "";
 
-    let layoutMeta = [];
-    try {
-      layoutMeta = JSON.parse(req.body.layouts || "[]");
-    } catch {
-      return res.status(400).json({ success: false, message: "Invalid layouts JSON" });
-    }
-    if (!Array.isArray(layoutMeta)) {
+    const layouts = parseJsonField(req.body.layouts, []);
+    if (!Array.isArray(layouts)) {
       return res.status(400).json({ success: false, message: "Layouts must be an array" });
     }
-    const layoutImages = req.files?.layoutImages || [];
-    for (let i = 0; i < layoutMeta.length; i++) {
-      if (!layoutMeta[i]?.title?.trim()) {
+    for (let i = 0; i < layouts.length; i++) {
+      const l = layouts[i];
+      if (!l?.title?.trim()) {
         return res
           .status(400)
           .json({ success: false, message: `Layout ${i + 1}: title is required` });
       }
-      const imgPath = fileUrl(layoutImages[i]);
-      if (!imgPath) {
+      if (!l?.image) {
         return res
           .status(400)
-          .json({ success: false, message: `Layout ${i + 1}: image file is required` });
+          .json({ success: false, message: `Layout ${i + 1}: image is required` });
       }
     }
-    const layouts = layoutMeta.map((meta, i) => ({
-      ...meta,
-      image: fileUrl(layoutImages[i]) || "",
-    }));
 
     const yearNum =
       reraYear !== undefined && reraYear !== "" && !Number.isNaN(Number(reraYear))
         ? Number(reraYear)
         : undefined;
 
-    let parsedFeatures = [];
-    try {
-      parsedFeatures = features ? JSON.parse(features) : [];
-    } catch {
-      return res.status(400).json({ success: false, message: "Invalid features JSON" });
+    const parsedFeatures = parseJsonField(features, []);
+    if (!Array.isArray(parsedFeatures)) {
+      return res.status(400).json({ success: false, message: "features must be an array" });
     }
 
     const project = new projectModel({
@@ -296,62 +287,55 @@ const updateProject = async (req, res) => {
       return res.status(400).json({ success: false, message: parsedStatus.error });
     }
 
-    const existingGalleryImages = JSON.parse(galleryImagesStr);
-    const existingLayouts = JSON.parse(layoutsStr);
-    const newLayoutsMeta = JSON.parse(newLayoutsStr);
+    const existingGalleryImages = parseJsonField(galleryImagesStr, []);
+    const existingLayouts = parseJsonField(layoutsStr, []);
+    const newGalleryPaths = parseJsonField(req.body.galleryNewImages, []);
+    const newLayouts = parseJsonField(newLayoutsStr, []);
 
-    const galleryNewImages = req.files?.galleryNewImages || [];
-    const newlayoutImages = req.files?.newlayoutImages || [];
+    if (!Array.isArray(existingGalleryImages) || !Array.isArray(newGalleryPaths)) {
+      return res.status(400).json({ success: false, message: "Invalid gallery images" });
+    }
+    if (!Array.isArray(existingLayouts) || !Array.isArray(newLayouts)) {
+      return res.status(400).json({ success: false, message: "Invalid layouts" });
+    }
 
     let pdfPathWithExt = existingProject.browcherPdf || "";
-    if (pdfChanged === "true") {
-      pdfPathWithExt = fileUrl(req.files?.browcherPdf?.[0]) || pdfPathWithExt;
+    if (pdfChanged === "true" || pdfChanged === true) {
+      pdfPathWithExt = req.body.browcherPdf || pdfPathWithExt;
     }
 
     let logo = existingProject.logo;
-    if (logoChanged === "true") {
-      logo = fileUrl(req.files?.logo?.[0]) || logo;
+    if (logoChanged === "true" || logoChanged === true) {
+      logo = req.body.logo || logo;
     }
     if (!logo) {
       return res.status(400).json({ success: false, message: "Logo is required" });
     }
 
     let coverImage = existingProject.coverImage;
-    if (coverImageChanged === "true") {
-      coverImage = fileUrl(req.files?.coverImage?.[0]) || coverImage;
+    if (coverImageChanged === "true" || coverImageChanged === true) {
+      coverImage = req.body.coverImage ?? coverImage;
     }
 
     let coverVideo = existingProject.coverVideo || "";
-    if (coverVideoChanged === "true") {
-      coverVideo = fileUrl(req.files?.coverVideo?.[0]) || "";
+    if (coverVideoChanged === "true" || coverVideoChanged === true) {
+      coverVideo = req.body.coverVideo ?? "";
     }
 
     let bannerImage = existingProject.bannerImage || "";
-    if (bannerImageChanged === "true") {
-      bannerImage = fileUrl(req.files?.bannerImage?.[0]) || "";
+    if (bannerImageChanged === "true" || bannerImageChanged === true) {
+      bannerImage = req.body.bannerImage ?? "";
     }
 
     let reraCertificate = existingProject.reraCertificate || "";
-    if (reraCertificateChanged === "true") {
-      const nextRera = fileUrl(req.files?.reraCertificate?.[0]);
-      if (nextRera) reraCertificate = nextRera;
+    if (reraCertificateChanged === "true" || reraCertificateChanged === true) {
+      if (req.body.reraCertificate) reraCertificate = req.body.reraCertificate;
     }
 
     let ocCertificate = existingProject.ocCertificate || "";
-    if (ocCertificateChanged === "true") {
-      const nextOc = fileUrl(req.files?.ocCertificate?.[0]);
-      if (nextOc) ocCertificate = nextOc;
+    if (ocCertificateChanged === "true" || ocCertificateChanged === true) {
+      if (req.body.ocCertificate) ocCertificate = req.body.ocCertificate;
     }
-
-    const newGalleryPaths = galleryNewImages.map((file) => ({
-      title: file.originalname.replace(/\s+/g, "_").split(".")[0],
-      image: fileUrl(file),
-    }));
-
-    const newLayouts = newLayoutsMeta.map((meta, i) => ({
-      ...meta,
-      image: fileUrl(newlayoutImages[i]) || "",
-    }));
 
     const updatedGalleryImages = [...existingGalleryImages, ...newGalleryPaths];
     const updatedLayouts = [...existingLayouts, ...newLayouts];
@@ -368,12 +352,7 @@ const updateProject = async (req, res) => {
       }
     }
 
-    let parsedFeatures = [];
-    try {
-      parsedFeatures = features ? JSON.parse(features) : [];
-    } catch {
-      parsedFeatures = [];
-    }
+    const parsedFeatures = parseJsonField(features, []);
 
     const yearNum =
       reraYear === "" || reraYear === undefined || reraYear === null
