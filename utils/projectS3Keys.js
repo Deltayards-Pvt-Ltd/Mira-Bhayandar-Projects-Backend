@@ -13,7 +13,10 @@ export function projectSubFolder(fieldname) {
     return "galleryImages";
   if (fieldname === "browcherPdf") return "browcherPdf";
   if (["layoutImages", "newlayoutImages"].includes(fieldname)) return "layouts";
-  if (fieldname === "reraCertificate") return "reraCertificate";
+  if (["reraCertificate", "newReraCertificates"].includes(fieldname))
+    return "reraCertificate";
+  if (["reraScannerImage", "newReraScannerImages"].includes(fieldname))
+    return "reraScannerImage";
   if (fieldname === "ocCertificate") return "ocCertificate";
   return "others";
 }

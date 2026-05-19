@@ -72,7 +72,6 @@ const PROJECT_SCALAR_KEYS = [
   "coverVideo",
   "bannerImage",
   "browcherPdf",
-  "reraCertificate",
   "ocCertificate",
 ];
 
@@ -88,6 +87,12 @@ export function collectProjectAssetUrls(project) {
   }
   for (const l of project.layouts || []) {
     if (l?.image) urls.push(l.image);
+  }
+  for (const r of project.reraCertificate || []) {
+    if (r?.file) urls.push(r.file);
+  }
+  for (const s of project.reraScannerImage || []) {
+    if (s?.image) urls.push(s.image);
   }
 
   return urls;

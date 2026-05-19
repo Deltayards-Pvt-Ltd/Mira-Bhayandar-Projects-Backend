@@ -2,7 +2,10 @@ import mongoose from "mongoose";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import projectModel, { PROJECT_STATUSES } from "../models/project.js";
+import projectModel, {
+  PROJECT_STATUSES,
+  PROPERTY_TYPES,
+} from "../models/project.js";
 import {
   collectProjectAssetUrls,
   diffUrlsToDelete,
@@ -33,6 +36,21 @@ function parseReraNo(v) {
   return typeof v === "string" ? v.trim() : "";
 }
 
+function parseAddress(v) {
+  return typeof v === "string" ? v.trim() : "";
+}
+
+function parsePropertyType(v) {
+  const s = typeof v === "string" ? v.trim() : "";
+  if (!s) return "";
+  if (!PROPERTY_TYPES.includes(s)) {
+    return {
+      error: `Property type must be one of: ${PROPERTY_TYPES.join(", ")}`,
+    };
+  }
+  return s;
+}
+
 function parseJsonField(value, fallback) {
   if (value === undefined || value === null || value === "") return fallback;
   if (typeof value === "object") return value;
@@ -41,6 +59,42 @@ function parseJsonField(value, fallback) {
   } catch {
     return fallback;
   }
+}
+
+/** Legacy single URL → one titled entry. */
+function normalizeReraCertificates(val) {
+  if (!val) return [];
+  if (typeof val === "string" && val.trim()) {
+    return [{ title: "Project", file: val.trim() }];
+  }
+  return Array.isArray(val) ? val : [];
+}
+
+function normalizeReraScannerImages(val) {
+  if (!val) return [];
+  if (typeof val === "string" && val.trim()) {
+    return [{ title: "Project", image: val.trim() }];
+  }
+  return Array.isArray(val) ? val : [];
+}
+
+function validateTitledAssets(items, label, fileKey) {
+  if (!Array.isArray(items)) {
+    return { error: `${label} must be an array` };
+  }
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (!item?.title?.trim()) {
+      return { error: `${label} ${i + 1}: title is required` };
+    }
+    if (!item?.[fileKey]) {
+      return { error: `${label} ${i + 1}: ${fileKey} is required` };
+    }
+  }
+  return items.map((item) => ({
+    title: item.title.trim(),
+    [fileKey]: item[fileKey],
+  }));
 }
 
 /** Optional WGS84 coordinate from multipart / JSON body. */
@@ -63,11 +117,18 @@ const createProject = async (req, res) => {
       reraNo,
       status,
       contactNumber,
+      address,
+      propertyType,
     } = req.body;
 
     const parsedStatus = parseStatus(status);
     if (parsedStatus?.error) {
       return res.status(400).json({ success: false, message: parsedStatus.error });
+    }
+
+    const parsedPropertyType = parsePropertyType(propertyType);
+    if (parsedPropertyType?.error) {
+      return res.status(400).json({ success: false, message: parsedPropertyType.error });
     }
 
     if (!name?.trim()) {
@@ -93,7 +154,24 @@ const createProject = async (req, res) => {
     const coverImagePath = req.body.coverImage || "";
     const coverVideoPath = req.body.coverVideo || "";
     const bannerImagePath = req.body.bannerImage || "";
-    const reraCertPath = req.body.reraCertificate || "";
+    const reraCertificates = validateTitledAssets(
+      normalizeReraCertificates(parseJsonField(req.body.reraCertificate, [])),
+      "RERA certificate",
+      "file"
+    );
+    if (reraCertificates?.error) {
+      return res.status(400).json({ success: false, message: reraCertificates.error });
+    }
+
+    const reraScannerImages = validateTitledAssets(
+      normalizeReraScannerImages(parseJsonField(req.body.reraScannerImage, [])),
+      "RERA scanner image",
+      "image"
+    );
+    if (reraScannerImages?.error) {
+      return res.status(400).json({ success: false, message: reraScannerImages.error });
+    }
+
     const ocCertPath = req.body.ocCertificate || "";
 
     const layouts = parseJsonField(req.body.layouts, []);
@@ -128,6 +206,8 @@ const createProject = async (req, res) => {
       name,
       builder,
       location,
+      address: parseAddress(address),
+      propertyType: parsedPropertyType,
       status: parsedStatus,
       contactNumber: parseContactNumber(contactNumber),
       latitude: parseCoord(req.body.latitude),
@@ -146,7 +226,8 @@ const createProject = async (req, res) => {
         month: typeof reraMonth === "string" ? reraMonth.trim() : "",
         year: yearNum,
       },
-      reraCertificate: reraCertPath,
+      reraCertificate: reraCertificates,
+      reraScannerImage: reraScannerImages,
       ocCertificate: ocCertPath,
     });
 
@@ -285,15 +366,22 @@ const updateProject = async (req, res) => {
       coverVideoChanged,
       bannerImageChanged,
       reraCertificateChanged,
+      reraScannerImageChanged,
       ocCertificateChanged,
       reraMonth,
       reraYear,
       reraNo,
       status,
       contactNumber,
+      address,
+      propertyType,
       galleryImages: galleryImagesStr = "[]",
       layouts: layoutsStr = "[]",
       newLayouts: newLayoutsStr = "[]",
+      reraCertificate: reraCertificateStr = "[]",
+      newReraCertificates: newReraCertificatesStr = "[]",
+      reraScannerImage: reraScannerImageStr = "[]",
+      newReraScannerImages: newReraScannerImagesStr = "[]",
     } = req.body;
 
     const existingProject = await projectModel.findById(id);
@@ -315,16 +403,37 @@ const updateProject = async (req, res) => {
       return res.status(400).json({ success: false, message: parsedStatus.error });
     }
 
+    const parsedPropertyType = parsePropertyType(
+      propertyType ?? existingProject.propertyType ?? ""
+    );
+    if (parsedPropertyType?.error) {
+      return res.status(400).json({ success: false, message: parsedPropertyType.error });
+    }
+
     const existingGalleryImages = parseJsonField(galleryImagesStr, []);
     const existingLayouts = parseJsonField(layoutsStr, []);
     const newGalleryPaths = parseJsonField(req.body.galleryNewImages, []);
     const newLayouts = parseJsonField(newLayoutsStr, []);
+    const existingReraCertificates = normalizeReraCertificates(
+      parseJsonField(reraCertificateStr, [])
+    );
+    const newReraCertificates = parseJsonField(newReraCertificatesStr, []);
+    const existingReraScannerImages = normalizeReraScannerImages(
+      parseJsonField(reraScannerImageStr, [])
+    );
+    const newReraScannerImages = parseJsonField(newReraScannerImagesStr, []);
 
     if (!Array.isArray(existingGalleryImages) || !Array.isArray(newGalleryPaths)) {
       return res.status(400).json({ success: false, message: "Invalid gallery images" });
     }
     if (!Array.isArray(existingLayouts) || !Array.isArray(newLayouts)) {
       return res.status(400).json({ success: false, message: "Invalid layouts" });
+    }
+    if (!Array.isArray(existingReraCertificates) || !Array.isArray(newReraCertificates)) {
+      return res.status(400).json({ success: false, message: "Invalid RERA certificates" });
+    }
+    if (!Array.isArray(existingReraScannerImages) || !Array.isArray(newReraScannerImages)) {
+      return res.status(400).json({ success: false, message: "Invalid RERA scanner images" });
     }
 
     let pdfPathWithExt = existingProject.browcherPdf || "";
@@ -355,9 +464,44 @@ const updateProject = async (req, res) => {
       bannerImage = req.body.bannerImage ?? "";
     }
 
-    let reraCertificate = existingProject.reraCertificate || "";
-    if (reraCertificateChanged === "true" || reraCertificateChanged === true) {
-      if (req.body.reraCertificate) reraCertificate = req.body.reraCertificate;
+    const reraCertsTouched =
+      reraCertificateChanged === "true" ||
+      reraCertificateChanged === true ||
+      reraCertificateStr !== "[]" ||
+      newReraCertificatesStr !== "[]";
+
+    let reraCertificate = normalizeReraCertificates(existingProject.reraCertificate);
+    if (reraCertsTouched) {
+      reraCertificate = [...existingReraCertificates, ...newReraCertificates];
+      const validatedReraCerts = validateTitledAssets(
+        reraCertificate,
+        "RERA certificate",
+        "file"
+      );
+      if (validatedReraCerts?.error) {
+        return res.status(400).json({ success: false, message: validatedReraCerts.error });
+      }
+      reraCertificate = validatedReraCerts;
+    }
+
+    const reraScannerTouched =
+      reraScannerImageChanged === "true" ||
+      reraScannerImageChanged === true ||
+      reraScannerImageStr !== "[]" ||
+      newReraScannerImagesStr !== "[]";
+
+    let reraScannerImage = normalizeReraScannerImages(existingProject.reraScannerImage);
+    if (reraScannerTouched) {
+      reraScannerImage = [...existingReraScannerImages, ...newReraScannerImages];
+      const validatedScanner = validateTitledAssets(
+        reraScannerImage,
+        "RERA scanner image",
+        "image"
+      );
+      if (validatedScanner?.error) {
+        return res.status(400).json({ success: false, message: validatedScanner.error });
+      }
+      reraScannerImage = validatedScanner;
     }
 
     let ocCertificate = existingProject.ocCertificate || "";
@@ -396,6 +540,8 @@ const updateProject = async (req, res) => {
       name,
       builder,
       location,
+      address: parseAddress(address ?? existingProject.address),
+      propertyType: parsedPropertyType,
       status: parsedStatus,
       contactNumber: parseContactNumber(contactNumber),
       latitude: nextLat !== undefined ? nextLat : existingProject.latitude,
@@ -418,6 +564,7 @@ const updateProject = async (req, res) => {
         year: yearNum,
       },
       reraCertificate,
+      reraScannerImage,
       ocCertificate,
     };
 
