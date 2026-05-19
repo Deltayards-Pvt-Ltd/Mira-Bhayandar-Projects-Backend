@@ -2,6 +2,13 @@ import mongoose from "mongoose";
 
 export const PROJECT_STATUSES = ["Under Construction", "Ready to Move"];
 
+/** Residential / commercial mix shown on listings and filters. */
+export const PROPERTY_TYPES = [
+  "Residential",
+  "Commercial",
+  "Residential & Commercial",
+];
+
 const projectSchema = new mongoose.Schema(
   {
     name: {
@@ -34,6 +41,19 @@ const projectSchema = new mongoose.Schema(
     location: {
       type: String,
       trim: true,
+    },
+
+    /** Full postal / site address (comma-separated lines ok). */
+    address: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    propertyType: {
+      type: String,
+      trim: true,
+      default: "",
     },
 
     status: {
@@ -77,7 +97,18 @@ const projectSchema = new mongoose.Schema(
       month: { type: String, default: "" },
       year: { type: Number },
     },
-    reraCertificate: { type: String, default: "" },
+    reraScannerImage: [
+      {
+        title: { type: String, required: true, trim: true },
+        image: { type: String, required: true },
+      },
+    ],
+    reraCertificate: [
+      {
+        title: { type: String, required: true, trim: true },
+        file: { type: String, required: true },
+      },
+    ],
     ocCertificate: { type: String, default: "" },
 
     layouts: [
