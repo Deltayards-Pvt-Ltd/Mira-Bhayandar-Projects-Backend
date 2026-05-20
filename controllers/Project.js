@@ -104,6 +104,19 @@ function parseCoord(v) {
   return Number.isFinite(n) ? n : undefined;
 }
 
+function parseActive(v, defaultVal = true) {
+  if (v === undefined || v === null) return defaultVal;
+  if (typeof v === "boolean") return v;
+  if (v === "true" || v === true || v === 1 || v === "1") return true;
+  if (v === "false" || v === false || v === 0 || v === "0") return false;
+  return defaultVal;
+}
+
+/** Public routes only return projects visible on the website. */
+function publicProjectQuery() {
+  return { active: { $ne: false } };
+}
+
 const createProject = async (req, res) => {
   try {
     const {
@@ -229,6 +242,7 @@ const createProject = async (req, res) => {
       reraCertificate: reraCertificates,
       reraScannerImage: reraScannerImages,
       ocCertificate: ocCertPath,
+      active: parseActive(req.body.active, true),
     });
 
     await project.save();
@@ -251,7 +265,10 @@ const createProject = async (req, res) => {
 
 const getAllProjects = async (req, res) => {
   try {
-    const allProjects = await projectModel.find().sort({ createdAt: -1 });
+    const includeInactive =
+      req.query.includeInactive === "true" || req.query.includeInactive === "1";
+    const filter = includeInactive ? {} : publicProjectQuery();
+    const allProjects = await projectModel.find(filter).sort({ createdAt: -1 });
     res.status(200).json({ success: true, message: "All Project Fetched", allProjects });
   } catch (error) {
     console.error(error);
@@ -263,7 +280,7 @@ const getAllProjects = async (req, res) => {
 const getProjectFilters = async (req, res) => {
   try {
     const projects = await projectModel
-      .find({}, { location: 1, layouts: 1 })
+      .find(publicProjectQuery(), { location: 1, layouts: 1 })
       .lean();
     const filters = buildProjectFilterOptions(projects);
     res.status(200).json({
@@ -283,8 +300,13 @@ const getProjectById = async (req, res) => {
     if (!id || !mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ success: false, message: "Invalid project id" });
     }
+    const includeInactive =
+      req.query.includeInactive === "true" || req.query.includeInactive === "1";
     const project = await projectModel.findById(id).lean();
     if (!project) {
+      return res.status(404).json({ success: false, message: "Project not found" });
+    }
+    if (!includeInactive && project.active === false) {
       return res.status(404).json({ success: false, message: "Project not found" });
     }
     res.status(200).json({ success: true, message: "Project fetched", project });
@@ -303,6 +325,7 @@ const getHeroProjects = async (req, res) => {
     const docs = await projectModel
       .find(
         {
+          ...publicProjectQuery(),
           $or: [
             { coverVideo: { $exists: true, $ne: "" } },
             { coverImage: { $exists: true, $ne: "" } },
@@ -566,6 +589,7 @@ const updateProject = async (req, res) => {
       reraCertificate,
       reraScannerImage,
       ocCertificate,
+      active: parseActive(req.body.active, existingProject.active !== false),
     };
 
     const oldUrls = collectProjectAssetUrls(existingProject);

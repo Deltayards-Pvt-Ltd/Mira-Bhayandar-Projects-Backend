@@ -62,6 +62,12 @@ const projectSchema = new mongoose.Schema(
       default: "Under Construction",
     },
 
+    /** When false, project is hidden from the public website. */
+    active: {
+      type: Boolean,
+      default: true,
+    },
+
     contactNumber: {
       type: String,
       trim: true,
