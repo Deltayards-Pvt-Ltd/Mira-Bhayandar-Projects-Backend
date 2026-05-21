@@ -320,6 +320,45 @@ const getProjectById = async (req, res) => {
  * Lean payload for the hero: _id, name, location, coverVideo, coverImage.
  * Only projects with coverVideo or coverImage.
  */
+/** Random public projects with cover media for the home featured grid. */
+const getFeaturedProjects = async (req, res) => {
+  try {
+    const parsed = parseInt(String(req.query.limit ?? "3"), 10);
+    const limit = Number.isFinite(parsed) ? Math.min(10, Math.max(1, parsed)) : 3;
+    const match = {
+      ...publicProjectQuery(),
+      $or: [
+        { coverVideo: { $exists: true, $ne: "" } },
+        { coverImage: { $exists: true, $ne: "" } },
+      ],
+    };
+
+    const count = await projectModel.countDocuments(match);
+    if (count === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "Featured projects fetched",
+        featuredProjects: [],
+      });
+    }
+
+    const sampleSize = Math.min(limit, count);
+    const featuredProjects = await projectModel.aggregate([
+      { $match: match },
+      { $sample: { size: sampleSize } },
+    ]);
+
+    res.status(200).json({
+      success: true,
+      message: "Featured projects fetched",
+      featuredProjects,
+    });
+  } catch (error) {
+    console.error("getFeaturedProjects error:", error);
+    res.status(500).json({ success: false, message: "Failed to fetch featured projects" });
+  }
+};
+
 const getHeroProjects = async (req, res) => {
   try {
     const docs = await projectModel
@@ -710,6 +749,7 @@ export {
   updateProject,
   getAllProjects,
   getProjectFilters,
+  getFeaturedProjects,
   getProjectById,
   getHeroProjects,
   downloadProjectAsset,

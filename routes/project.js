@@ -4,6 +4,7 @@ import {
   downloadProjectAsset,
   getAllProjects,
   getProjectFilters,
+  getFeaturedProjects,
   getProjectById,
   getHeroProjects,
   updateProject,
@@ -19,6 +20,7 @@ projectRouter.post('/addProject', createProject);
 projectRouter.post('/updateProject', updateProject);
 projectRouter.get('/allProjects', getAllProjects);
 projectRouter.get('/filters', getProjectFilters);
+projectRouter.get('/featured', getFeaturedProjects);
 projectRouter.get('/hero', getHeroProjects);
 projectRouter.get('/download-asset', downloadProjectAsset);
 projectRouter.get('/:id', getProjectById);
