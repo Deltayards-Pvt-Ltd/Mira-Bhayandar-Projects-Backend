@@ -198,11 +198,6 @@ const createProject = async (req, res) => {
           .status(400)
           .json({ success: false, message: `Layout ${i + 1}: title is required` });
       }
-      if (!l?.image) {
-        return res
-          .status(400)
-          .json({ success: false, message: `Layout ${i + 1}: image is required` });
-      }
     }
 
     const yearNum =
@@ -577,10 +572,10 @@ const updateProject = async (req, res) => {
     if (updatedLayouts.length > 0) {
       for (let i = 0; i < updatedLayouts.length; i++) {
         const l = updatedLayouts[i];
-        if (!l?.title?.trim() || !l?.image) {
+        if (!l?.title?.trim()) {
           return res.status(400).json({
             success: false,
-            message: `Layout ${i + 1} must have title and image`,
+            message: `Layout ${i + 1}: title is required`,
           });
         }
       }

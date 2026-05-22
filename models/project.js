@@ -122,7 +122,7 @@ const projectSchema = new mongoose.Schema(
         title: { type: String, required: true },
         area: { type: Number },
         price: { type: Number },
-        image: { type: String, required: true },
+        image: { type: String, default: "" },
       },
     ],
   },
