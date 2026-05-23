@@ -120,9 +120,10 @@ const projectSchema = new mongoose.Schema(
     layouts: [
       {
         title: { type: String, required: true },
-        area: { type: Number },
+        area: { type: String, default: "" },
         price: { type: Number },
         image: { type: String, default: "" },
+        images: [{ type: String }],
       },
     ],
   },

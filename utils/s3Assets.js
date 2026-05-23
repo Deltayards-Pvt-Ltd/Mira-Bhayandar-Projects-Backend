@@ -86,7 +86,13 @@ export function collectProjectAssetUrls(project) {
     if (g?.image) urls.push(g.image);
   }
   for (const l of project.layouts || []) {
-    if (l?.image) urls.push(l.image);
+    if (Array.isArray(l?.images) && l.images.length) {
+      for (const img of l.images) {
+        if (img) urls.push(img);
+      }
+    } else if (l?.image) {
+      urls.push(l.image);
+    }
   }
   for (const r of project.reraCertificate || []) {
     if (r?.file) urls.push(r.file);

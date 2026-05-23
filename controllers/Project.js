@@ -14,6 +14,7 @@ import {
   parseS3KeyFromUrl,
 } from "../utils/s3Assets.js";
 import { buildProjectFilterOptions } from "../utils/projectFilters.js";
+import { normalizeLayoutsForSave } from "../utils/layoutNormalize.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -187,10 +188,11 @@ const createProject = async (req, res) => {
 
     const ocCertPath = req.body.ocCertificate || "";
 
-    const layouts = parseJsonField(req.body.layouts, []);
-    if (!Array.isArray(layouts)) {
+    const layoutsRaw = parseJsonField(req.body.layouts, []);
+    if (!Array.isArray(layoutsRaw)) {
       return res.status(400).json({ success: false, message: "Layouts must be an array" });
     }
+    const layouts = normalizeLayoutsForSave(layoutsRaw);
     for (let i = 0; i < layouts.length; i++) {
       const l = layouts[i];
       if (!l?.title?.trim()) {
@@ -567,7 +569,10 @@ const updateProject = async (req, res) => {
     }
 
     const updatedGalleryImages = [...existingGalleryImages, ...newGalleryPaths];
-    const updatedLayouts = [...existingLayouts, ...newLayouts];
+    const updatedLayouts = normalizeLayoutsForSave([
+      ...existingLayouts,
+      ...newLayouts,
+    ]);
 
     if (updatedLayouts.length > 0) {
       for (let i = 0; i < updatedLayouts.length; i++) {
