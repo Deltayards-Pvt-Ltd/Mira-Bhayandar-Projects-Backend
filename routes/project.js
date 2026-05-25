@@ -8,6 +8,8 @@ import {
   getProjectById,
   getHeroProjects,
   updateProject,
+  getAllProjectsAdmin,
+  getUpcomingProjects,
 } from '../controllers/Project.js';
 import { presignProjectUploads } from '../controllers/upload.js';
 
@@ -23,6 +25,8 @@ projectRouter.get('/filter-options', getFilterOptions);
 projectRouter.get('/featured', getFeaturedProjects);
 projectRouter.get('/hero', getHeroProjects);
 projectRouter.get('/download-asset', downloadProjectAsset);
+projectRouter.get('/getAllProjectsAdmin', getAllProjectsAdmin);
+projectRouter.get('/upcomingProjects', getUpcomingProjects);
 projectRouter.get('/:id', getProjectById);
 projectRouter.post('/deleteProject', deleteProject);
 

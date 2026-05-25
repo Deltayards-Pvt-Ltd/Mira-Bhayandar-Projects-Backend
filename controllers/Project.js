@@ -101,11 +101,6 @@ const createProject = async (req, res) => {
     if (!name?.trim()) {
       return res.status(400).json({ success: false, message: "Name is required" });
     }
-    if (!description?.trim()) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Description is required" });
-    }
 
     const galleryPaths = parseJson(req.body.galleryImages, []);
     if (!Array.isArray(galleryPaths)) {
@@ -114,9 +109,6 @@ const createProject = async (req, res) => {
 
     const pdfPath = req.body.browcherPdf || "";
     const logoPath = req.body.logo || "";
-    if (!logoPath) {
-      return res.status(400).json({ success: false, message: "Logo is required" });
-    }
 
     const coverImagePath = req.body.coverImage || "";
     const coverVideoPath = req.body.coverVideo || "";
@@ -203,8 +195,8 @@ const createProject = async (req, res) => {
     const msg =
       err.name === "ValidationError"
         ? Object.values(err.errors || {})
-            .map((e) => e.message)
-            .join(" ")
+          .map((e) => e.message)
+          .join(" ")
         : "Failed to create project";
     res.status(err.name === "ValidationError" ? 400 : 500).json({
       success: false,
@@ -218,7 +210,7 @@ const getAllProjects = async (req, res) => {
     const includeInactive =
       req.query.includeInactive === "true" || req.query.includeInactive === "1";
     const filter = includeInactive ? {} : PUBLIC_ONLY;
-    const allProjects = await projectModel.find(filter).sort({ createdAt: -1 });
+    const allProjects = await projectModel.find({ ...filter, status: { $ne: "Upcoming" } }).sort({ createdAt: -1 });
     res.status(200).json({ success: true, message: "All Project Fetched", allProjects });
   } catch (error) {
     console.error(error);
@@ -226,22 +218,22 @@ const getAllProjects = async (req, res) => {
   }
 };
 
-/** Unique area / configuration / status strings for filter dropdowns. */
+/** Unique area / configuration / property type strings for filter dropdowns. */
 const getFilterOptions = async (req, res) => {
   try {
     const projects = await projectModel
-      .find(PUBLIC_ONLY, { location: 1, layouts: 1, status: 1 })
+      .find({ ...PUBLIC_ONLY, status: { $ne: "Upcoming" } }, { location: 1, layouts: 1, propertyType: 1 })
       .lean();
 
     const areas = new Set();
     const configurations = new Set();
-    const statuses = new Set();
+    const propertyTypes = new Set();
 
     for (const p of projects) {
       const loc = String(p.location || "").trim();
       if (loc) areas.add(loc);
-      const status = String(p.status || "").trim();
-      if (status) statuses.add(status);
+      const propertyType = String(p.propertyType || "").trim();
+      if (propertyType) propertyTypes.add(propertyType);
       for (const layout of p.layouts || []) {
         const title = String(layout?.title || "").trim();
         if (title) configurations.add(title);
@@ -255,7 +247,7 @@ const getFilterOptions = async (req, res) => {
       filterOptions: {
         areas: [...areas].sort(sort),
         configurations: [...configurations].sort(sort),
-        statuses: [...statuses].sort(sort),
+        propertyTypes: [...propertyTypes].sort(sort),
       },
     });
   } catch (error) {
@@ -297,6 +289,7 @@ const getFeaturedProjects = async (req, res) => {
     const limit = Number.isFinite(parsed) ? Math.min(10, Math.max(1, parsed)) : 3;
     const match = {
       ...PUBLIC_ONLY,
+      status: { $ne: "Upcoming" },
       $or: [
         { coverVideo: { $exists: true, $ne: "" } },
         { coverImage: { $exists: true, $ne: "" } },
@@ -335,6 +328,7 @@ const getHeroProjects = async (req, res) => {
       .find(
         {
           ...PUBLIC_ONLY,
+          status: { $ne: "Upcoming" },
           $or: [
             { coverVideo: { $exists: true, $ne: "" } },
             { coverImage: { $exists: true, $ne: "" } },
@@ -381,6 +375,8 @@ const getHeroProjects = async (req, res) => {
   }
 };
 
+
+
 const updateProject = async (req, res) => {
   try {
     const {
@@ -424,11 +420,6 @@ const updateProject = async (req, res) => {
     if (!name?.trim()) {
       return res.status(400).json({ success: false, message: "Name is required" });
     }
-    if (!description?.trim()) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Description is required" });
-    }
 
     const parsedStatus = parseStatus(status ?? existingProject.status);
     if (parsedStatus?.error) {
@@ -469,12 +460,9 @@ const updateProject = async (req, res) => {
       pdfPathWithExt = req.body.browcherPdf || pdfPathWithExt;
     }
 
-    let logo = existingProject.logo;
+    let logo = existingProject.logo || "";
     if (logoChanged === "true" || logoChanged === true) {
-      logo = req.body.logo || logo;
-    }
-    if (!logo) {
-      return res.status(400).json({ success: false, message: "Logo is required" });
+      logo = req.body.logo ?? logo;
     }
 
     let coverImage = existingProject.coverImage;
@@ -618,8 +606,8 @@ const updateProject = async (req, res) => {
     const msg =
       error.name === "ValidationError"
         ? Object.values(error.errors || {})
-            .map((e) => e.message)
-            .join(" ")
+          .map((e) => e.message)
+          .join(" ")
         : "Failed to update project";
     res.status(error.name === "ValidationError" ? 400 : 500).json({
       success: false,
@@ -716,6 +704,31 @@ const deleteProject = async (req, res) => {
   }
 };
 
+
+const getAllProjectsAdmin = async (req, res) => {
+  console.log("getAllProjectsAdmin called");
+  try {
+    const allProjects = await projectModel.find().sort({ createdAt: -1 });
+    res.status(200).json({ success: true, message: "All projects fetched", allProjects });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Failed to fetch all projects" });
+  }
+};
+
+
+const getUpcomingProjects = async (req, res) => {
+  try {
+    const upcomingProjects = await projectModel
+      .find({ ...PUBLIC_ONLY, status: "Upcoming" })
+      .sort({ createdAt: -1 });
+    res.status(200).json({ success: true, message: "Upcoming projects fetched", upcomingProjects });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Failed to fetch upcoming projects" });
+  }
+};
+
 export {
   createProject,
   updateProject,
@@ -726,4 +739,6 @@ export {
   getHeroProjects,
   downloadProjectAsset,
   deleteProject,
+  getAllProjectsAdmin,
+  getUpcomingProjects,
 };
