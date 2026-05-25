@@ -3,7 +3,7 @@ import {
   deleteProject,
   downloadProjectAsset,
   getAllProjects,
-  getProjectFilters,
+  getFilterOptions,
   getFeaturedProjects,
   getProjectById,
   getHeroProjects,
@@ -19,7 +19,7 @@ projectRouter.post('/presignUploads', presignProjectUploads);
 projectRouter.post('/addProject', createProject);
 projectRouter.post('/updateProject', updateProject);
 projectRouter.get('/allProjects', getAllProjects);
-projectRouter.get('/filters', getProjectFilters);
+projectRouter.get('/filter-options', getFilterOptions);
 projectRouter.get('/featured', getFeaturedProjects);
 projectRouter.get('/hero', getHeroProjects);
 projectRouter.get('/download-asset', downloadProjectAsset);

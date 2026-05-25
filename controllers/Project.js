@@ -13,47 +13,19 @@ import {
   isS3AssetUrl,
   parseS3KeyFromUrl,
 } from "../utils/s3Assets.js";
-import { buildProjectFilterOptions } from "../utils/projectFilters.js";
 import { normalizeLayoutsForSave } from "../utils/layoutNormalize.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const uploadsRoot = path.resolve(path.join(__dirname, "..", "uploads"));
 
-function parseStatus(v) {
-  const s = typeof v === "string" ? v.trim() : "";
-  if (!s) return "Under Construction";
-  if (!PROJECT_STATUSES.includes(s)) {
-    return { error: `Status must be one of: ${PROJECT_STATUSES.join(", ")}` };
-  }
-  return s;
-}
+const PUBLIC_ONLY = { active: { $ne: false } };
 
-function parseContactNumber(v) {
-  return typeof v === "string" ? v.trim() : "";
-}
+const trim = (v) => (typeof v === "string" ? v.trim() : "");
 
-function parseReraNo(v) {
-  return typeof v === "string" ? v.trim() : "";
-}
-
-function parseAddress(v) {
-  return typeof v === "string" ? v.trim() : "";
-}
-
-function parsePropertyType(v) {
-  const s = typeof v === "string" ? v.trim() : "";
-  if (!s) return "";
-  if (!PROPERTY_TYPES.includes(s)) {
-    return {
-      error: `Property type must be one of: ${PROPERTY_TYPES.join(", ")}`,
-    };
-  }
-  return s;
-}
-
-function parseJsonField(value, fallback) {
-  if (value === undefined || value === null || value === "") return fallback;
+/** Multipart often sends JSON as a string. */
+function parseJson(value, fallback) {
+  if (value == null || value === "") return fallback;
   if (typeof value === "object") return value;
   try {
     return JSON.parse(value);
@@ -62,60 +34,41 @@ function parseJsonField(value, fallback) {
   }
 }
 
-/** Legacy single URL → one titled entry. */
-function normalizeReraCertificates(val) {
+function parseStatus(v) {
+  const s = trim(v);
+  if (!s) return "Under Construction";
+  if (!PROJECT_STATUSES.includes(s)) {
+    return { error: `Status must be one of: ${PROJECT_STATUSES.join(", ")}` };
+  }
+  return s;
+}
+
+function parsePropertyType(v) {
+  const s = trim(v);
+  if (!s) return "";
+  if (!PROPERTY_TYPES.includes(s)) {
+    return { error: `Property type must be one of: ${PROPERTY_TYPES.join(", ")}` };
+  }
+  return s;
+}
+
+/** Legacy single URL string → [{ title, [urlKey] }]. */
+function asTitledList(val, urlKey) {
   if (!val) return [];
   if (typeof val === "string" && val.trim()) {
-    return [{ title: "Project", file: val.trim() }];
+    return [{ title: "Project", [urlKey]: val.trim() }];
   }
   return Array.isArray(val) ? val : [];
 }
 
-function normalizeReraScannerImages(val) {
-  if (!val) return [];
-  if (typeof val === "string" && val.trim()) {
-    return [{ title: "Project", image: val.trim() }];
-  }
-  return Array.isArray(val) ? val : [];
-}
-
-function validateTitledAssets(items, label, fileKey) {
-  if (!Array.isArray(items)) {
-    return { error: `${label} must be an array` };
-  }
+function validateTitledAssets(items, label, urlKey) {
+  if (!Array.isArray(items)) return { error: `${label} must be an array` };
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
-    if (!item?.title?.trim()) {
-      return { error: `${label} ${i + 1}: title is required` };
-    }
-    if (!item?.[fileKey]) {
-      return { error: `${label} ${i + 1}: ${fileKey} is required` };
-    }
+    if (!item?.title?.trim()) return { error: `${label} ${i + 1}: title is required` };
+    if (!item?.[urlKey]) return { error: `${label} ${i + 1}: ${urlKey} is required` };
   }
-  return items.map((item) => ({
-    title: item.title.trim(),
-    [fileKey]: item[fileKey],
-  }));
-}
-
-/** Optional WGS84 coordinate from multipart / JSON body. */
-function parseCoord(v) {
-  if (v === undefined || v === null || v === "") return undefined;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : undefined;
-}
-
-function parseActive(v, defaultVal = true) {
-  if (v === undefined || v === null) return defaultVal;
-  if (typeof v === "boolean") return v;
-  if (v === "true" || v === true || v === 1 || v === "1") return true;
-  if (v === "false" || v === false || v === 0 || v === "0") return false;
-  return defaultVal;
-}
-
-/** Public routes only return projects visible on the website. */
-function publicProjectQuery() {
-  return { active: { $ne: false } };
+  return items.map((item) => ({ title: item.title.trim(), [urlKey]: item[urlKey] }));
 }
 
 const createProject = async (req, res) => {
@@ -154,7 +107,7 @@ const createProject = async (req, res) => {
         .json({ success: false, message: "Description is required" });
     }
 
-    const galleryPaths = parseJsonField(req.body.galleryImages, []);
+    const galleryPaths = parseJson(req.body.galleryImages, []);
     if (!Array.isArray(galleryPaths)) {
       return res.status(400).json({ success: false, message: "galleryImages must be an array" });
     }
@@ -169,7 +122,7 @@ const createProject = async (req, res) => {
     const coverVideoPath = req.body.coverVideo || "";
     const bannerImagePath = req.body.bannerImage || "";
     const reraCertificates = validateTitledAssets(
-      normalizeReraCertificates(parseJsonField(req.body.reraCertificate, [])),
+      asTitledList(parseJson(req.body.reraCertificate, []), "file"),
       "RERA certificate",
       "file"
     );
@@ -178,7 +131,7 @@ const createProject = async (req, res) => {
     }
 
     const reraScannerImages = validateTitledAssets(
-      normalizeReraScannerImages(parseJsonField(req.body.reraScannerImage, [])),
+      asTitledList(parseJson(req.body.reraScannerImage, []), "image"),
       "RERA scanner image",
       "image"
     );
@@ -188,7 +141,7 @@ const createProject = async (req, res) => {
 
     const ocCertPath = req.body.ocCertificate || "";
 
-    const layoutsRaw = parseJsonField(req.body.layouts, []);
+    const layoutsRaw = parseJson(req.body.layouts, []);
     if (!Array.isArray(layoutsRaw)) {
       return res.status(400).json({ success: false, message: "Layouts must be an array" });
     }
@@ -207,7 +160,7 @@ const createProject = async (req, res) => {
         ? Number(reraYear)
         : undefined;
 
-    const parsedFeatures = parseJsonField(features, []);
+    const parsedFeatures = parseJson(features, []);
     if (!Array.isArray(parsedFeatures)) {
       return res.status(400).json({ success: false, message: "features must be an array" });
     }
@@ -216,12 +169,12 @@ const createProject = async (req, res) => {
       name,
       builder,
       location,
-      address: parseAddress(address),
+      address: trim(address),
       propertyType: parsedPropertyType,
       status: parsedStatus,
-      contactNumber: parseContactNumber(contactNumber),
-      latitude: parseCoord(req.body.latitude),
-      longitude: parseCoord(req.body.longitude),
+      contactNumber: trim(contactNumber),
+      latitude: Number(req.body.latitude) || undefined,
+      longitude: Number(req.body.longitude) || undefined,
       description,
       features: parsedFeatures,
       galleryImages: galleryPaths,
@@ -231,7 +184,7 @@ const createProject = async (req, res) => {
       coverImage: coverImagePath,
       coverVideo: coverVideoPath,
       bannerImage: bannerImagePath,
-      reraNo: parseReraNo(reraNo),
+      reraNo: trim(reraNo),
       reraPossession: {
         month: typeof reraMonth === "string" ? reraMonth.trim() : "",
         year: yearNum,
@@ -239,7 +192,7 @@ const createProject = async (req, res) => {
       reraCertificate: reraCertificates,
       reraScannerImage: reraScannerImages,
       ocCertificate: ocCertPath,
-      active: parseActive(req.body.active, true),
+      active: req.body.active !== false && req.body.active !== "false" && req.body.active !== "0",
     });
 
     await project.save();
@@ -264,7 +217,7 @@ const getAllProjects = async (req, res) => {
   try {
     const includeInactive =
       req.query.includeInactive === "true" || req.query.includeInactive === "1";
-    const filter = includeInactive ? {} : publicProjectQuery();
+    const filter = includeInactive ? {} : PUBLIC_ONLY;
     const allProjects = await projectModel.find(filter).sort({ createdAt: -1 });
     res.status(200).json({ success: true, message: "All Project Fetched", allProjects });
   } catch (error) {
@@ -273,21 +226,41 @@ const getAllProjects = async (req, res) => {
   }
 };
 
-/** Unique locality + configuration options derived from all projects (for filter dropdowns). */
-const getProjectFilters = async (req, res) => {
+/** Unique area / configuration / status strings for filter dropdowns. */
+const getFilterOptions = async (req, res) => {
   try {
     const projects = await projectModel
-      .find(publicProjectQuery(), { location: 1, layouts: 1 })
+      .find(PUBLIC_ONLY, { location: 1, layouts: 1, status: 1 })
       .lean();
-    const filters = buildProjectFilterOptions(projects);
+
+    const areas = new Set();
+    const configurations = new Set();
+    const statuses = new Set();
+
+    for (const p of projects) {
+      const loc = String(p.location || "").trim();
+      if (loc) areas.add(loc);
+      const status = String(p.status || "").trim();
+      if (status) statuses.add(status);
+      for (const layout of p.layouts || []) {
+        const title = String(layout?.title || "").trim();
+        if (title) configurations.add(title);
+      }
+    }
+
+    const sort = (a, b) => a.localeCompare(b, undefined, { sensitivity: "base" });
     res.status(200).json({
       success: true,
-      message: "Project filters fetched",
-      filters,
+      message: "Filter options fetched",
+      filterOptions: {
+        areas: [...areas].sort(sort),
+        configurations: [...configurations].sort(sort),
+        statuses: [...statuses].sort(sort),
+      },
     });
   } catch (error) {
-    console.error("getProjectFilters error:", error);
-    res.status(500).json({ success: false, message: "Failed to fetch project filters" });
+    console.error("getFilterOptions error:", error);
+    res.status(500).json({ success: false, message: "Failed to fetch filter options" });
   }
 };
 
@@ -323,7 +296,7 @@ const getFeaturedProjects = async (req, res) => {
     const parsed = parseInt(String(req.query.limit ?? "3"), 10);
     const limit = Number.isFinite(parsed) ? Math.min(10, Math.max(1, parsed)) : 3;
     const match = {
-      ...publicProjectQuery(),
+      ...PUBLIC_ONLY,
       $or: [
         { coverVideo: { $exists: true, $ne: "" } },
         { coverImage: { $exists: true, $ne: "" } },
@@ -361,7 +334,7 @@ const getHeroProjects = async (req, res) => {
     const docs = await projectModel
       .find(
         {
-          ...publicProjectQuery(),
+          ...PUBLIC_ONLY,
           $or: [
             { coverVideo: { $exists: true, $ne: "" } },
             { coverImage: { $exists: true, $ne: "" } },
@@ -469,18 +442,14 @@ const updateProject = async (req, res) => {
       return res.status(400).json({ success: false, message: parsedPropertyType.error });
     }
 
-    const existingGalleryImages = parseJsonField(galleryImagesStr, []);
-    const existingLayouts = parseJsonField(layoutsStr, []);
-    const newGalleryPaths = parseJsonField(req.body.galleryNewImages, []);
-    const newLayouts = parseJsonField(newLayoutsStr, []);
-    const existingReraCertificates = normalizeReraCertificates(
-      parseJsonField(reraCertificateStr, [])
-    );
-    const newReraCertificates = parseJsonField(newReraCertificatesStr, []);
-    const existingReraScannerImages = normalizeReraScannerImages(
-      parseJsonField(reraScannerImageStr, [])
-    );
-    const newReraScannerImages = parseJsonField(newReraScannerImagesStr, []);
+    const existingGalleryImages = parseJson(galleryImagesStr, []);
+    const existingLayouts = parseJson(layoutsStr, []);
+    const newGalleryPaths = parseJson(req.body.galleryNewImages, []);
+    const newLayouts = parseJson(newLayoutsStr, []);
+    const existingReraCertificates = asTitledList(parseJson(reraCertificateStr, []), "file");
+    const newReraCertificates = parseJson(newReraCertificatesStr, []);
+    const existingReraScannerImages = asTitledList(parseJson(reraScannerImageStr, []), "image");
+    const newReraScannerImages = parseJson(newReraScannerImagesStr, []);
 
     if (!Array.isArray(existingGalleryImages) || !Array.isArray(newGalleryPaths)) {
       return res.status(400).json({ success: false, message: "Invalid gallery images" });
@@ -529,7 +498,7 @@ const updateProject = async (req, res) => {
       reraCertificateStr !== "[]" ||
       newReraCertificatesStr !== "[]";
 
-    let reraCertificate = normalizeReraCertificates(existingProject.reraCertificate);
+    let reraCertificate = asTitledList(existingProject.reraCertificate, "file");
     if (reraCertsTouched) {
       reraCertificate = [...existingReraCertificates, ...newReraCertificates];
       const validatedReraCerts = validateTitledAssets(
@@ -549,7 +518,7 @@ const updateProject = async (req, res) => {
       reraScannerImageStr !== "[]" ||
       newReraScannerImagesStr !== "[]";
 
-    let reraScannerImage = normalizeReraScannerImages(existingProject.reraScannerImage);
+    let reraScannerImage = asTitledList(existingProject.reraScannerImage, "image");
     if (reraScannerTouched) {
       reraScannerImage = [...existingReraScannerImages, ...newReraScannerImages];
       const validatedScanner = validateTitledAssets(
@@ -586,7 +555,7 @@ const updateProject = async (req, res) => {
       }
     }
 
-    const parsedFeatures = parseJsonField(features, []);
+    const parsedFeatures = parseJson(features, []);
 
     const yearNum =
       reraYear === "" || reraYear === undefined || reraYear === null
@@ -595,19 +564,19 @@ const updateProject = async (req, res) => {
           ? existingProject.reraPossession?.year
           : Number(reraYear);
 
-    const nextLat = parseCoord(latitudeRaw);
-    const nextLng = parseCoord(longitudeRaw);
+    const nextLat = Number(latitudeRaw);
+    const nextLng = Number(longitudeRaw);
 
     const updatedFields = {
       name,
       builder,
       location,
-      address: parseAddress(address ?? existingProject.address),
+      address: trim(address ?? existingProject.address),
       propertyType: parsedPropertyType,
       status: parsedStatus,
-      contactNumber: parseContactNumber(contactNumber),
-      latitude: nextLat !== undefined ? nextLat : existingProject.latitude,
-      longitude: nextLng !== undefined ? nextLng : existingProject.longitude,
+      contactNumber: trim(contactNumber),
+      latitude: Number.isFinite(nextLat) ? nextLat : existingProject.latitude,
+      longitude: Number.isFinite(nextLng) ? nextLng : existingProject.longitude,
       description,
       logo,
       coverImage,
@@ -617,7 +586,7 @@ const updateProject = async (req, res) => {
       galleryImages: updatedGalleryImages,
       layouts: updatedLayouts,
       browcherPdf: pdfPathWithExt,
-      reraNo: parseReraNo(reraNo ?? existingProject.reraNo),
+      reraNo: trim(reraNo ?? existingProject.reraNo),
       reraPossession: {
         month:
           typeof reraMonth === "string"
@@ -628,7 +597,10 @@ const updateProject = async (req, res) => {
       reraCertificate,
       reraScannerImage,
       ocCertificate,
-      active: parseActive(req.body.active, existingProject.active !== false),
+      active:
+        req.body.active !== undefined
+          ? req.body.active !== false && req.body.active !== "false" && req.body.active !== "0"
+          : existingProject.active !== false,
     };
 
     const oldUrls = collectProjectAssetUrls(existingProject);
@@ -748,7 +720,7 @@ export {
   createProject,
   updateProject,
   getAllProjects,
-  getProjectFilters,
+  getFilterOptions,
   getFeaturedProjects,
   getProjectById,
   getHeroProjects,
