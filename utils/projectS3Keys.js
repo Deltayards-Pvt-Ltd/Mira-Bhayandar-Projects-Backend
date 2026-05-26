@@ -18,6 +18,7 @@ export function projectSubFolder(fieldname) {
   if (["reraScannerImage", "newReraScannerImages"].includes(fieldname))
     return "reraScannerImage";
   if (fieldname === "ocCertificate") return "ocCertificate";
+  if (fieldname === "walkthroughVideo") return "walkthroughVideo";
   return "others";
 }
 
@@ -25,7 +26,7 @@ function fileBaseName(originalname) {
   return originalname.replace(/\s+/g, "_").replace(/\.[^/.]+$/, "");
 }
 
-/** S3 object key for a project asset (used by multer and presigned uploads). */
+/** S3 object key for a project asset (presigned uploads). */
 export function buildProjectObjectKey(projectName, fieldname, originalname) {
   const safeName = sanitizeProjectName(projectName);
   const subFolder = projectSubFolder(fieldname);

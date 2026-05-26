@@ -6,6 +6,7 @@ import {
   s3StorageClass,
   getPublicObjectUrl,
 } from "../config/s3.js";
+import { buildBlogObjectKey } from "../utils/blogS3Keys.js";
 import { buildProjectObjectKey } from "../utils/projectS3Keys.js";
 
 const MAX_PRESIGN_FILES = 50;
@@ -73,6 +74,50 @@ export const presignProjectUploads = async (req, res) => {
     res.status(400).json({
       success: false,
       message: err.message || "Failed to create upload URLs",
+    });
+  }
+};
+
+/**
+ * Presigned PUT for a single blog image (same pattern as project uploads).
+ */
+export const presignBlogUpload = async (req, res) => {
+  try {
+    const { fileName, contentType } = req.body;
+
+    if (!fileName?.trim()) {
+      return res
+        .status(400)
+        .json({ success: false, message: "fileName is required" });
+    }
+
+    const key = buildBlogObjectKey(fileName.trim());
+    const type = contentType || "application/octet-stream";
+
+    const command = new PutObjectCommand({
+      Bucket: s3Bucket,
+      Key: key,
+      ContentType: type,
+      ...(s3StorageClass && { StorageClass: s3StorageClass }),
+    });
+
+    const uploadUrl = await getSignedUrl(s3Client, command, {
+      expiresIn: PRESIGN_EXPIRES_SEC,
+    });
+
+    res.json({
+      success: true,
+      upload: {
+        key,
+        uploadUrl,
+        publicUrl: getPublicObjectUrl(key),
+      },
+    });
+  } catch (err) {
+    console.error("presignBlogUpload:", err);
+    res.status(400).json({
+      success: false,
+      message: err.message || "Failed to create upload URL",
     });
   }
 };

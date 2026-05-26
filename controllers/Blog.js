@@ -5,7 +5,8 @@ const createBlog = async (req, res) => {
     try {
         const { title, content, writer, tagline } = req.body;
 
-        const imagePath = req.file?.location || req.file?.path || "";
+        const imagePath =
+            typeof req.body.image === "string" ? req.body.image.trim() : "";
 
         const blog = new blogModel({
             title,

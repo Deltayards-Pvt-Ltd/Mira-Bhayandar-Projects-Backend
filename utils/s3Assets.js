@@ -73,6 +73,7 @@ const PROJECT_SCALAR_KEYS = [
   "bannerImage",
   "browcherPdf",
   "ocCertificate",
+  "walkthroughVideo",
 ];
 
 export function collectProjectAssetUrls(project) {

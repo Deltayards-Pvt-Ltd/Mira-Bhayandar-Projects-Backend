@@ -116,6 +116,8 @@ const projectSchema = new mongoose.Schema(
     ],
     ocCertificate: { type: String, default: "" },
 
+    walkthroughVideo: { type: String, default: "" },
+
     layouts: [
       {
         title: { type: String, required: true },

@@ -113,6 +113,7 @@ const createProject = async (req, res) => {
     const coverImagePath = req.body.coverImage || "";
     const coverVideoPath = req.body.coverVideo || "";
     const bannerImagePath = req.body.bannerImage || "";
+    const walkthroughVideoPath = req.body.walkthroughVideo || "";
     const reraCertificates = validateTitledAssets(
       asTitledList(parseJson(req.body.reraCertificate, []), "file"),
       "RERA certificate",
@@ -176,6 +177,7 @@ const createProject = async (req, res) => {
       coverImage: coverImagePath,
       coverVideo: coverVideoPath,
       bannerImage: bannerImagePath,
+      walkthroughVideo: walkthroughVideoPath,
       reraNo: trim(reraNo),
       reraPossession: {
         month: typeof reraMonth === "string" ? reraMonth.trim() : "",
@@ -392,6 +394,7 @@ const updateProject = async (req, res) => {
       logoChanged,
       coverImageChanged,
       coverVideoChanged,
+      walkthroughVideoChanged,
       bannerImageChanged,
       reraCertificateChanged,
       reraScannerImageChanged,
@@ -473,6 +476,11 @@ const updateProject = async (req, res) => {
     let coverVideo = existingProject.coverVideo || "";
     if (coverVideoChanged === "true" || coverVideoChanged === true) {
       coverVideo = req.body.coverVideo ?? "";
+    }
+
+    let walkthroughVideo = existingProject.walkthroughVideo || "";
+    if (walkthroughVideoChanged === "true" || walkthroughVideoChanged === true) {
+      walkthroughVideo = req.body.walkthroughVideo ?? "";
     }
 
     let bannerImage = existingProject.bannerImage || "";
@@ -569,6 +577,7 @@ const updateProject = async (req, res) => {
       logo,
       coverImage,
       coverVideo,
+      walkthroughVideo,
       bannerImage,
       features: parsedFeatures,
       galleryImages: updatedGalleryImages,
