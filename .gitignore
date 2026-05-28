@@ -2,3 +2,9 @@
 .env.example
 
 node_modules
+
+data/
+
+scripts/
+
+.gitignore

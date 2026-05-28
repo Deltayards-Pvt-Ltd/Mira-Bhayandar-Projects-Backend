@@ -460,7 +460,8 @@ const updateProject = async (req, res) => {
 
     let pdfPathWithExt = existingProject.browcherPdf || "";
     if (pdfChanged === "true" || pdfChanged === true) {
-      pdfPathWithExt = req.body.browcherPdf || pdfPathWithExt;
+      // Allow explicit clearing: empty string should overwrite existing brochure URL.
+      pdfPathWithExt = req.body.browcherPdf ?? "";
     }
 
     let logo = existingProject.logo || "";
