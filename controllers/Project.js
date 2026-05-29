@@ -107,13 +107,23 @@ const createProject = async (req, res) => {
       return res.status(400).json({ success: false, message: "galleryImages must be an array" });
     }
 
-    const pdfPath = req.body.browcherPdf || "";
+    // const pdfPath = req.body.browcherPdf || "";
     const logoPath = req.body.logo || "";
 
     const coverImagePath = req.body.coverImage || "";
     const coverVideoPath = req.body.coverVideo || "";
     const bannerImagePath = req.body.bannerImage || "";
     const walkthroughVideoPath = req.body.walkthroughVideo || "";
+
+    const browcherPdfs = validateTitledAssets(
+      asTitledList(parseJson(req.body.browcherPdf, []), "file"),
+      "Browcher PDF",
+      "file"
+    );
+    if (browcherPdfs?.error) {
+      return res.status(400).json({ success: false, message: browcherPdfs.error });
+    }
+
     const reraCertificates = validateTitledAssets(
       asTitledList(parseJson(req.body.reraCertificate, []), "file"),
       "RERA certificate",
@@ -172,7 +182,8 @@ const createProject = async (req, res) => {
       features: parsedFeatures,
       galleryImages: galleryPaths,
       layouts,
-      browcherPdf: pdfPath,
+      // browcherPdf: pdfPath,
+      browcherPdf: browcherPdfs,
       logo: logoPath,
       coverImage: coverImagePath,
       coverVideo: coverVideoPath,
@@ -390,7 +401,7 @@ const updateProject = async (req, res) => {
       longitude: longitudeRaw,
       description,
       features,
-      pdfChanged,
+      browcherPdfChanged,
       logoChanged,
       coverImageChanged,
       coverVideoChanged,
@@ -407,6 +418,8 @@ const updateProject = async (req, res) => {
       address,
       propertyType,
       galleryImages: galleryImagesStr = "[]",
+      browcherPdf: browcherPdfStr = "[]",
+      newBrowcherPdfs: newBrowcherPdfsStr = "[]",
       layouts: layoutsStr = "[]",
       newLayouts: newLayoutsStr = "[]",
       reraCertificate: reraCertificateStr = "[]",
@@ -440,6 +453,8 @@ const updateProject = async (req, res) => {
     const existingLayouts = parseJson(layoutsStr, []);
     const newGalleryPaths = parseJson(req.body.galleryNewImages, []);
     const newLayouts = parseJson(newLayoutsStr, []);
+    const existingBrowcherPdfs = asTitledList(parseJson(browcherPdfStr, []), "file");
+    const newBrowcherPdfs = parseJson(newBrowcherPdfsStr, []);
     const existingReraCertificates = asTitledList(parseJson(reraCertificateStr, []), "file");
     const newReraCertificates = parseJson(newReraCertificatesStr, []);
     const existingReraScannerImages = asTitledList(parseJson(reraScannerImageStr, []), "image");
@@ -451,6 +466,9 @@ const updateProject = async (req, res) => {
     if (!Array.isArray(existingLayouts) || !Array.isArray(newLayouts)) {
       return res.status(400).json({ success: false, message: "Invalid layouts" });
     }
+    if (!Array.isArray(existingBrowcherPdfs) || !Array.isArray(newBrowcherPdfs)) {
+      return res.status(400).json({ success: false, message: "Invalid brochure PDFs" });
+    }
     if (!Array.isArray(existingReraCertificates) || !Array.isArray(newReraCertificates)) {
       return res.status(400).json({ success: false, message: "Invalid RERA certificates" });
     }
@@ -458,10 +476,24 @@ const updateProject = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid RERA scanner images" });
     }
 
-    let pdfPathWithExt = existingProject.browcherPdf || "";
-    if (pdfChanged === "true" || pdfChanged === true) {
-      // Allow explicit clearing: empty string should overwrite existing brochure URL.
-      pdfPathWithExt = req.body.browcherPdf ?? "";
+    const browcherTouched =
+      browcherPdfChanged === "true" ||
+      browcherPdfChanged === true ||
+      browcherPdfStr !== "[]" ||
+      newBrowcherPdfsStr !== "[]";
+
+    let browcherPdf = asTitledList(existingProject.browcherPdf, "file");
+    if (browcherTouched) {
+      browcherPdf = [...existingBrowcherPdfs, ...newBrowcherPdfs];
+      const validatedBrowcher = validateTitledAssets(
+        browcherPdf,
+        "Browcher PDF",
+        "file"
+      );
+      if (validatedBrowcher?.error) {
+        return res.status(400).json({ success: false, message: validatedBrowcher.error });
+      }
+      browcherPdf = validatedBrowcher;
     }
 
     let logo = existingProject.logo || "";
@@ -583,7 +615,7 @@ const updateProject = async (req, res) => {
       features: parsedFeatures,
       galleryImages: updatedGalleryImages,
       layouts: updatedLayouts,
-      browcherPdf: pdfPathWithExt,
+      browcherPdf,
       reraNo: trim(reraNo ?? existingProject.reraNo),
       reraPossession: {
         month:

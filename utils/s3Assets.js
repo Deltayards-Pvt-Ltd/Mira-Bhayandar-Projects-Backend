@@ -71,7 +71,6 @@ const PROJECT_SCALAR_KEYS = [
   "coverImage",
   "coverVideo",
   "bannerImage",
-  "browcherPdf",
   "ocCertificate",
   "walkthroughVideo",
 ];
@@ -93,6 +92,14 @@ export function collectProjectAssetUrls(project) {
       }
     } else if (l?.image) {
       urls.push(l.image);
+    }
+  }
+  const browcher = project.browcherPdf;
+  if (typeof browcher === "string" && browcher.trim()) {
+    urls.push(browcher.trim());
+  } else {
+    for (const b of browcher || []) {
+      if (b?.file) urls.push(b.file);
     }
   }
   for (const r of project.reraCertificate || []) {

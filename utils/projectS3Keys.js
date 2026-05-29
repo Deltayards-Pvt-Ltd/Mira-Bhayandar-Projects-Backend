@@ -11,7 +11,7 @@ export function projectSubFolder(fieldname) {
   if (fieldname === "bannerImage") return "bannerImage";
   if (["galleryImages", "galleryNewImages"].includes(fieldname))
     return "galleryImages";
-  if (fieldname === "browcherPdf") return "browcherPdf";
+  if (["browcherPdf", "newBrowcherPdfs"].includes(fieldname)) return "browcherPdf";
   if (["layoutImages", "newlayoutImages"].includes(fieldname)) return "layouts";
   if (["reraCertificate", "newReraCertificates"].includes(fieldname))
     return "reraCertificate";

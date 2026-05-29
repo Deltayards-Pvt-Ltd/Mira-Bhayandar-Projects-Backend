@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-export const PROJECT_STATUSES = ["Under Construction", "Ready to Move","Upcoming"];
+export const PROJECT_STATUSES = ["Under Construction", "Ready to Move", "Upcoming"];
 
 /** Residential / commercial mix shown on listings and filters. */
 export const PROPERTY_TYPES = [
@@ -18,7 +18,7 @@ const projectSchema = new mongoose.Schema(
     },
     logo: {
       type: String,
-      
+
     },
     coverImage: {
       type: String,
@@ -90,7 +90,13 @@ const projectSchema = new mongoose.Schema(
       },
     ],
 
-    browcherPdf: { type: String, default: "" },
+    // browcherPdf: { type: String, default: "" },
+    browcherPdf: [
+      {
+        title: { type: String, default: "" },
+        file: { type: String, default: "" },
+      },
+    ],
 
     reraNo: {
       type: String,
