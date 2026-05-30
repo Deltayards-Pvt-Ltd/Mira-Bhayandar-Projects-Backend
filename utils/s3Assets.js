@@ -68,6 +68,7 @@ export async function deleteS3Objects(urls) {
 
 const PROJECT_SCALAR_KEYS = [
   "logo",
+  "builderLogo",
   "coverImage",
   "coverVideo",
   "bannerImage",

@@ -6,6 +6,7 @@ export function sanitizeProjectName(name) {
 
 export function projectSubFolder(fieldname) {
   if (fieldname === "logo") return "logo";
+  if (fieldname === "builderLogo") return "builderLogo";
   if (fieldname === "coverImage") return "coverImage";
   if (fieldname === "coverVideo") return "coverVideo";
   if (fieldname === "bannerImage") return "bannerImage";

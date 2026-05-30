@@ -1,8 +1,11 @@
 import mongoose from "mongoose";
 import path from "path";
 import fs from "fs";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "url";
 import projectModel, {
+  PLAN_OPTIONS,
   PROJECT_STATUSES,
   PROPERTY_TYPES,
 } from "../models/project.js";
@@ -50,6 +53,26 @@ function parsePropertyType(v) {
     return { error: `Property type must be one of: ${PROPERTY_TYPES.join(", ")}` };
   }
   return s;
+}
+
+/** Unique, validated plan strings (e.g. "1 BHK", "JODI"). */
+function parsePlans(value) {
+  const raw = parseJson(value, []);
+  if (!Array.isArray(raw)) return { error: "plans must be an array" };
+  const out = [];
+  const seen = new Set();
+  for (const item of raw) {
+    const s = trim(item);
+    if (!s) continue;
+    if (!PLAN_OPTIONS.includes(s)) {
+      return { error: `Plan must be one of: ${PLAN_OPTIONS.join(", ")}` };
+    }
+    if (!seen.has(s)) {
+      seen.add(s);
+      out.push(s);
+    }
+  }
+  return out;
 }
 
 /** Legacy single URL string → [{ title, [urlKey] }]. */
@@ -107,8 +130,14 @@ const createProject = async (req, res) => {
       return res.status(400).json({ success: false, message: "galleryImages must be an array" });
     }
 
+    const parsedPlans = parsePlans(req.body.plans);
+    if (parsedPlans?.error) {
+      return res.status(400).json({ success: false, message: parsedPlans.error });
+    }
+
     // const pdfPath = req.body.browcherPdf || "";
     const logoPath = req.body.logo || "";
+    const builderLogoPath = req.body.builderLogo || "";
 
     const coverImagePath = req.body.coverImage || "";
     const coverVideoPath = req.body.coverVideo || "";
@@ -181,10 +210,12 @@ const createProject = async (req, res) => {
       description,
       features: parsedFeatures,
       galleryImages: galleryPaths,
+      plans: parsedPlans,
       layouts,
       // browcherPdf: pdfPath,
       browcherPdf: browcherPdfs,
       logo: logoPath,
+      builderLogo: builderLogoPath,
       coverImage: coverImagePath,
       coverVideo: coverVideoPath,
       bannerImage: bannerImagePath,
@@ -235,7 +266,7 @@ const getAllProjects = async (req, res) => {
 const getFilterOptions = async (req, res) => {
   try {
     const projects = await projectModel
-      .find({ ...PUBLIC_ONLY, status: { $ne: "Upcoming" } }, { location: 1, layouts: 1, propertyType: 1 })
+      .find({ ...PUBLIC_ONLY, status: { $ne: "Upcoming" } }, { location: 1, plans: 1, propertyType: 1 })
       .lean();
 
     const areas = new Set();
@@ -247,9 +278,9 @@ const getFilterOptions = async (req, res) => {
       if (loc) areas.add(loc);
       const propertyType = String(p.propertyType || "").trim();
       if (propertyType) propertyTypes.add(propertyType);
-      for (const layout of p.layouts || []) {
-        const title = String(layout?.title || "").trim();
-        if (title) configurations.add(title);
+      for (const plan of p.plans || []) {
+        const t = String(plan || "").trim();
+        if (t) configurations.add(t);
       }
     }
 
@@ -261,6 +292,7 @@ const getFilterOptions = async (req, res) => {
         areas: [...areas].sort(sort),
         configurations: [...configurations].sort(sort),
         propertyTypes: [...propertyTypes].sort(sort),
+        planChoices: PLAN_OPTIONS,
       },
     });
   } catch (error) {
@@ -298,8 +330,6 @@ const getProjectById = async (req, res) => {
 /** Random public projects with cover media for the home featured grid. */
 const getFeaturedProjects = async (req, res) => {
   try {
-    const parsed = parseInt(String(req.query.limit ?? "3"), 10);
-    const limit = Number.isFinite(parsed) ? Math.min(10, Math.max(1, parsed)) : 3;
     const match = {
       ...PUBLIC_ONLY,
       status: { $ne: "Upcoming" },
@@ -309,25 +339,17 @@ const getFeaturedProjects = async (req, res) => {
       ],
     };
 
-    const count = await projectModel.countDocuments(match);
-    if (count === 0) {
-      return res.status(200).json({
-        success: true,
-        message: "Featured projects fetched",
-        featuredProjects: [],
-      });
-    }
 
-    const sampleSize = Math.min(limit, count);
     const featuredProjects = await projectModel.aggregate([
-      { $match: match },
-      { $sample: { size: sampleSize } },
+      { $match: match }
     ]);
+
+    const shuffledProjects = featuredProjects.sort((a, b) => Math.random() - 0.5);
 
     res.status(200).json({
       success: true,
       message: "Featured projects fetched",
-      featuredProjects,
+      featuredProjects: shuffledProjects,
     });
   } catch (error) {
     console.error("getFeaturedProjects error:", error);
@@ -354,26 +376,16 @@ const getHeroProjects = async (req, res) => {
           builder: 1,
           coverVideo: 1,
           coverImage: 1,
-          "layouts.title": 1,
+          plans: 1,
         }
       )
       .sort({ createdAt: -1 })
       .lean();
 
-    // Derive BHK list from layout titles (e.g. "1 BHK", "2 BHK"). De-duped, original order kept.
-    const heroProjects = docs.map((p) => {
-      const seen = new Set();
-      const bhkTypes = [];
-      for (const l of p.layouts || []) {
-        const t = (l?.title || "").trim();
-        if (t && !seen.has(t)) {
-          seen.add(t);
-          bhkTypes.push(t);
-        }
-      }
-      const { layouts, ...rest } = p;
-      return { ...rest, bhkTypes };
-    });
+    const heroProjects = docs.map((p) => ({
+      ...p,
+      bhkTypes: (p.plans || []).map((t) => String(t || "").trim()).filter(Boolean),
+    }));
 
     res.status(200).json({
       success: true,
@@ -401,6 +413,7 @@ const updateProject = async (req, res) => {
       longitude: longitudeRaw,
       description,
       features,
+      plans: plansRaw,
       browcherPdfChanged,
       logoChanged,
       coverImageChanged,
@@ -453,6 +466,14 @@ const updateProject = async (req, res) => {
     const existingLayouts = parseJson(layoutsStr, []);
     const newGalleryPaths = parseJson(req.body.galleryNewImages, []);
     const newLayouts = parseJson(newLayoutsStr, []);
+
+    const parsedPlans =
+      plansRaw !== undefined
+        ? parsePlans(plansRaw)
+        : (existingProject.plans ?? []);
+    if (parsedPlans?.error) {
+      return res.status(400).json({ success: false, message: parsedPlans.error });
+    }
     const existingBrowcherPdfs = asTitledList(parseJson(browcherPdfStr, []), "file");
     const newBrowcherPdfs = parseJson(newBrowcherPdfsStr, []);
     const existingReraCertificates = asTitledList(parseJson(reraCertificateStr, []), "file");
@@ -614,6 +635,7 @@ const updateProject = async (req, res) => {
       bannerImage,
       features: parsedFeatures,
       galleryImages: updatedGalleryImages,
+      plans: parsedPlans,
       layouts: updatedLayouts,
       browcherPdf,
       reraNo: trim(reraNo ?? existingProject.reraNo),
@@ -710,8 +732,12 @@ const downloadProjectAsset = async (req, res) => {
       res.setHeader("Content-Type", contentType);
       if (contentLength) res.setHeader("Content-Length", contentLength);
 
-      const buffer = Buffer.from(await upstream.arrayBuffer());
-      return res.end(buffer);
+      if (!upstream.body) {
+        return res.status(502).json({ success: false, message: "Empty asset response" });
+      }
+
+      await pipeline(Readable.fromWeb(upstream.body), res);
+      return;
     }
 
     const localPath = resolveLocalUploadPath(raw);

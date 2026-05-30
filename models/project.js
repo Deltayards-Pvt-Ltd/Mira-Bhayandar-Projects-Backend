@@ -9,6 +9,9 @@ export const PROPERTY_TYPES = [
   "Residential & Commercial",
 ];
 
+/** BHK / configuration options admin picks per project (used for filters). */
+export const PLAN_OPTIONS = ["1 BHK", "2 BHK", "3 BHK", "4 BHK", "5 BHK", "JODI"];
+
 const projectSchema = new mongoose.Schema(
   {
     name: {
@@ -18,7 +21,11 @@ const projectSchema = new mongoose.Schema(
     },
     logo: {
       type: String,
-
+      default: "",
+    },
+    builderLogo: {
+      type: String,
+      default: "",
     },
     coverImage: {
       type: String,
@@ -43,11 +50,10 @@ const projectSchema = new mongoose.Schema(
       trim: true,
     },
 
-    /** Full postal / site address (comma-separated lines ok). */
-    address: {
-      type: String,
-      trim: true,
-      default: "",
+    /** Admin-selected configurations for this project (filter + display). */
+    plans: {
+      type: [{ type: String, enum: PLAN_OPTIONS }],
+      default: [],
     },
 
     propertyType: {
