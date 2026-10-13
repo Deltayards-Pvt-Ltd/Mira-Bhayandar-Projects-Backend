@@ -39,7 +39,7 @@ export const setupAdmin = async (req, res) => {
         message: "Admin already exists — log in and change password on the dashboard",
       });
     }
-
+    
     const { secret, username, password } = req.body;
     if (secret !== bootstrapPin()) {
       return res.status(401).json({ success: false, message: "Wrong PIN" });
