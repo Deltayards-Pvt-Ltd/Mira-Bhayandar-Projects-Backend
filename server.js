@@ -37,9 +37,12 @@ app.use("/api/faq", faqRouter);
 app.use("/api/contact", contactRouter);
 app.use("/api/lead", leadRouter);
 
-// ✅ Test route
 app.get("/", (req, res) => {
   res.send("Hello from Backend");
+});
+
+app.get("/health", (_req, res) => {
+  res.json({ ok: true, service: "mira-bhayandar-backend" });
 });
 
 // ✅ Error handler
