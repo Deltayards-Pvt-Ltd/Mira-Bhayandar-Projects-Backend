@@ -88,6 +88,13 @@ const projectSchema = new mongoose.Schema(
       default: "",
     },
 
+    // whatsapp number
+    whatsappNumber: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
     /** Map pin for project detail (WGS84). Optional — set from admin. */
     latitude: { type: Number },
     longitude: { type: Number },

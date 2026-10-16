@@ -27,7 +27,7 @@ const PUBLIC_ONLY = { active: { $ne: false } };
 
 const trim = (v) => (typeof v === "string" ? v.trim() : "");
 
-/** Store 10-digit Indian mobile only (admin enters e.g. 9404958265). */
+/** Store 10-digit Indian mobile only (admin enters e.g. 99999999). */
 function contactNumberForSave(raw) {
   const trimmed = trim(raw);
   if (!trimmed) return { value: "" };
@@ -39,6 +39,20 @@ function contactNumberForSave(raw) {
   }
   return { value: digits };
 }
+
+// 
+function WpNumberForSave(raw) {
+  const trimmed = trim(raw);
+  if (!trimmed) return { value: "" };
+  let digits = trimmed.replace(/\D/g, "");
+  if (digits.length === 12 && digits.startsWith("91")) digits = digits.slice(2);
+  if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
+  if (!/^[6-9]\d{9}$/.test(digits)) {
+    return { error: "Whatsapp number must be 10 digits (e.g. 9404958265)" };
+  }
+  return { value: digits };
+}
+
 
 /** Multipart often sends JSON as a string. */
 function parseJson(value, fallback) {
@@ -121,6 +135,7 @@ const createProject = async (req, res) => {
       reraNo,
       status,
       contactNumber,
+      whatsappNumber,
       address,
       propertyType,
     } = req.body;
@@ -216,6 +231,11 @@ const createProject = async (req, res) => {
       return res.status(400).json({ success: false, message: savedContact.error });
     }
 
+    const savesWhatsApp = whatsappNumber(whatsappNumber);
+    if (savesWhatsApp.error) {
+      return res.status(400).json({ success: false, message: savesWhatsApp.error });
+    }
+
     const slug = await buildUniqueProjectSlug(name.trim());
 
     const project = new projectModel({
@@ -227,6 +247,7 @@ const createProject = async (req, res) => {
       propertyType: parsedPropertyType,
       status: parsedStatus,
       contactNumber: savedContact.value,
+      whatsappNumber: savesWhatsApp.value,
       latitude: Number(req.body.latitude) || undefined,
       longitude: Number(req.body.longitude) || undefined,
       description,
@@ -458,6 +479,7 @@ const updateProject = async (req, res) => {
       reraNo,
       status,
       contactNumber,
+      whatsappNumber,
       address,
       propertyType,
       galleryImages: galleryImagesStr = "[]",
@@ -652,6 +674,11 @@ const updateProject = async (req, res) => {
       return res.status(400).json({ success: false, message: savedContact.error });
     }
 
+    const savedWhatsapp = WpNumberForSave(whatsappNumber);
+    if (savedWhatsapp.error) {
+      return res.status(400).json({ success: false, message: savedWhatsapp.error });
+    }
+
     const trimmedName = name.trim();
     const needsSlug =
       !existingProject.slug || trimmedName !== String(existingProject.name || "").trim();
@@ -668,6 +695,7 @@ const updateProject = async (req, res) => {
       propertyType: parsedPropertyType,
       status: parsedStatus,
       contactNumber: savedContact.value,
+      whatsappNumber: savedWhatsapp.value,
       latitude: Number.isFinite(nextLat) ? nextLat : existingProject.latitude,
       longitude: Number.isFinite(nextLng) ? nextLng : existingProject.longitude,
       description,
